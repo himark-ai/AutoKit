@@ -1,29 +1,31 @@
+// app/workflows.tsx
 import { View, Text, TouchableOpacity, ScrollView, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { ArrowLeft, Play, Clock, Pause, Plus, Trash2 } from "lucide-react-native";
 import { useState, useEffect } from "react";
-import { WorkflowDB, Workflow } from "@/lib/database";
+import { WorkflowDB, Workflow, HistoryDB } from "@/lib/database";
 
 interface WorkflowCardProps {
   workflow: Workflow;
   onDelete: (id: string) => void;
+  onPlay: (workflow: Workflow) => Promise<void>;
 }
 
-const WorkflowCard = ({ workflow, onDelete }: WorkflowCardProps) => {
+const WorkflowCard = ({ workflow, onDelete, onPlay }: WorkflowCardProps) => {
   const [isRunning, setIsRunning] = useState(false);
   const { title, description, lastRun, nodeCount } = workflow.data;
+  const router = useRouter();
 
-  const handleCardPress = async () => {
-    // Получаем данные из БД при клике
-    const dbWorkflow = await WorkflowDB.getById(workflow.id);
-    if (dbWorkflow) {
-      Alert.alert(
-        "Workflow Data",
-        JSON.stringify(dbWorkflow.data, null, 2),
-        [{ text: "OK" }]
-      );
-    }
+  const handleCardPress = () => {
+    // Навигация на страницу редактирования
+    router.push(`/workflows/${workflow.id}`);
+  };
+
+  const handlePlayPress = async () => {
+    setIsRunning(true);
+    await onPlay(workflow);
+    setIsRunning(false);
   };
 
   const handleDelete = () => {
@@ -32,7 +34,11 @@ const WorkflowCard = ({ workflow, onDelete }: WorkflowCardProps) => {
       `Are you sure you want to delete "${title}"?`,
       [
         { text: "Cancel", style: "cancel" },
-        { text: "Delete", style: "destructive", onPress: () => onDelete(workflow.id) }
+        { 
+          text: "Delete", 
+          style: "destructive", 
+          onPress: () => onDelete(workflow.id) 
+        }
       ]
     );
   };
@@ -72,7 +78,8 @@ const WorkflowCard = ({ workflow, onDelete }: WorkflowCardProps) => {
         <View className="flex-row items-center ml-2">
           <TouchableOpacity 
             className="w-10 h-10 bg-blue-500/20 rounded-xl items-center justify-center mr-2"
-            onPress={() => setIsRunning(!isRunning)}
+            onPress={handlePlayPress}
+            disabled={isRunning}
           >
             {isRunning ? (
               <Pause color="#8ab4f8" size={16} />
@@ -102,55 +109,64 @@ export default function Workflows() {
   const loadWorkflows = async () => {
     try {
       setLoading(true);
-      await WorkflowDB.forceInit(); // Принудительное обновление данных
       const data = await WorkflowDB.getAll();
       setWorkflows(data);
     } catch (error) {
       console.error('Error loading workflows:', error);
+      Alert.alert("Error", "Failed to load workflows");
     } finally {
       setLoading(false);
     }
   };
 
-  // Добавление нового workflow
-  const addWorkflow = async () => {
+  // Запуск workflow и добавление записи в history
+  const handlePlayWorkflow = async (workflow: Workflow) => {
     try {
-      const newWorkflowData = {
-        title: `New Workflow ${workflows.length + 1}`,
-        description: "Custom workflow description",
-        lastRun: "Never",
-        nodeCount: 3,
-        graph: {
-          nodes: [
-            { id: "1", type: "start", label: "Start", x: 100, y: 200 },
-            { id: "2", type: "process", label: "Process", x: 300, y: 200 },
-            { id: "3", type: "end", label: "End", x: 500, y: 200 }
-          ],
-          links: [
-            { source: "1", target: "2" },
-            { source: "2", target: "3" }
-          ],
-          coords: {
-            "1": { x: 100, y: 200 },
-            "2": { x: 300, y: 200 },
-            "3": { x: 500, y: 200 }
-          }
+      // Создаем запись в history со статусом RUNNING
+      const runId = await HistoryDB.add(
+        workflow.id,
+        'RUNNING',
+        `Starting workflow: ${workflow.name}\nTimestamp: ${new Date().toISOString()}`
+      );
+
+      // Имитация выполнения workflow (замените на реальную логику)
+      setTimeout(async () => {
+        try {
+          const success = Math.random() > 0.3; // 70% успеха для демо
+          const status = success ? 'SUCCESS' : 'ERROR';
+          const log = success 
+            ? `Workflow ${workflow.name} completed successfully\nExecution time: 2.5s\nResults: Processed 3 nodes`
+            : `Workflow ${workflow.name} failed\nError: Timeout on node 2\nRetry attempt: 1/3`;
+
+          await HistoryDB.updateRunStatus(runId, status, log);
+        } catch (error) {
+          console.error('Error updating run status:', error);
         }
-      };
-      
-      await WorkflowDB.add(newWorkflowData);
-      await loadWorkflows(); // Перезагружаем список
+      }, 2500);
+
+      Alert.alert(
+        "Workflow Started",
+        `Workflow "${workflow.name}" is now running. Check History tab for details.`,
+        [{ text: "OK" }]
+      );
+
     } catch (error) {
-      console.error('Error adding workflow:', error);
-      Alert.alert("Error", "Failed to add workflow");
+      console.error('Error starting workflow:', error);
+      Alert.alert("Error", "Failed to start workflow");
     }
   };
 
   // Удаление workflow
   const deleteWorkflow = async (id: string) => {
     try {
+      // Сначала удаляем связанные записи из history
+      await HistoryDB.deleteByWorkflowId(id);
+      
+      // Затем удаляем сам workflow
       await WorkflowDB.delete(id);
+      
       await loadWorkflows(); // Перезагружаем список
+      Alert.alert("Success", "Workflow deleted successfully");
     } catch (error) {
       console.error('Error deleting workflow:', error);
       Alert.alert("Error", "Failed to delete workflow");
@@ -174,7 +190,7 @@ export default function Workflows() {
           
           <TouchableOpacity 
             className="w-10 h-10 bg-green-500/20 rounded-xl items-center justify-center"
-            onPress={addWorkflow}
+            onPress={() => router.push('/workflows/new')}
           >
             <Plus color="#22c55e" size={20} />
           </TouchableOpacity>
@@ -191,6 +207,7 @@ export default function Workflows() {
                 key={workflow.id}
                 workflow={workflow}
                 onDelete={deleteWorkflow}
+                onPlay={handlePlayWorkflow}
               />
             ))}
             
@@ -199,9 +216,9 @@ export default function Workflows() {
                 <Text className="text-gray-400 font-google text-base mb-4">No workflows found</Text>
                 <TouchableOpacity 
                   className="bg-blue-500/20 px-6 py-3 rounded-xl"
-                  onPress={addWorkflow}
+                  onPress={() => router.push('/workflows/new')}
                 >
-                  <Text className="text-blue-400 font-google text-base">Add First Workflow</Text>
+                  <Text className="text-blue-400 font-google text-base">Create First Workflow</Text>
                 </TouchableOpacity>
               </View>
             )}
