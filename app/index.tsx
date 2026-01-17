@@ -3,14 +3,23 @@ import "@/global.css";
 import { ElementType } from "react";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { View, Text, ScrollView, TouchableOpacity } from "react-native";
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  NativeModules,
+} from "react-native";
 import {
   Settings,
   Workflow,
   KeyRound,
   LayoutGrid,
   History,
+  Bug,
 } from "lucide-react-native";
+
+const { DatabaseModule } = NativeModules;
 
 interface MenuCardProps {
   title: string;
@@ -85,7 +94,7 @@ export default function App() {
         <ScrollView showsVerticalScrollIndicator={false} className="flex-1">
           <MenuCard
             title="Workflows"
-            count={12}
+            count={DatabaseModule.getWorkflowCount()}
             icon={Workflow}
             iconBg="bg-red-400/80"
             href="/workflows"
@@ -99,10 +108,17 @@ export default function App() {
           />
           <MenuCard
             title="History"
-            count={48}
+            count={DatabaseModule.getRunCount()}
             icon={History}
             iconBg="bg-blue-500/80"
             href="/history"
+          />
+          <MenuCard
+            title="Test"
+            count={1}
+            icon={Bug}
+            iconBg="bg-black"
+            href="/test"
           />
         </ScrollView>
       </View>
