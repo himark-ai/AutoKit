@@ -1,399 +1,365 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+// lib/database.ts
+import { NativeModules } from 'react-native';
 
+const { DatabaseModule } = NativeModules;
+
+// Интерфейсы для вашей базы данных
 export interface Workflow {
   id: string;
-  data: any; // JSON данные workflow
+  name: string;
+  json: string;
+  status: 'ENABLED' | 'DISABLED';
+  data?: any; // распарсенный json
 }
 
 export interface WorkflowRun {
   id: string;
   workflowId: string;
-  workflowName: string;
-  startTime: string;
-  endTime: string;
-  duration: number; // в секундах
-  status: 'Running' | 'Succeeded' | 'Error';
-  log: string[];
+  start: number; // timestamp
+  end: number; // timestamp (0 если нет)
+  status: 'RUNNING' | 'SUCCESS' | 'ERROR';
+  log: string;
+  workflowName?: string; // будет подгружаться отдельно
 }
 
-const WORKFLOWS_KEY = 'workflows';
-const HISTORY_KEY = 'workflow_history';
+// Вспомогательная функция для безопасного парсинга JSON
+const safeJsonParse = (jsonString: string): any => {
+  try {
+    return JSON.parse(jsonString);
+  } catch (error) {
+    console.error('Error parsing JSON:', error);
+    return {
+      title: 'Invalid JSON',
+      description: 'Failed to parse workflow data',
+      lastRun: 'Never',
+      nodeCount: 0,
+      graph: { nodes: [], links: [], coords: {} }
+    };
+  }
+};
 
-export class WorkflowDB {
-  // Получить все workflows
-  static async getAll(): Promise<Workflow[]> {
+// Рабочие методы для Workflows
+export const WorkflowDB = {
+  async forceInit() {
+    // Для нативной БД это не нужно
+    return Promise.resolve();
+  },
+
+  async getAll(): Promise<Workflow[]> {
     try {
-      const data = await AsyncStorage.getItem(WORKFLOWS_KEY);
-      return data ? JSON.parse(data) : [];
+      const result = await DatabaseModule.getAllWorkflows();
+      if (!Array.isArray(result)) {
+        console.warn('Expected array from getAllWorkflows, got:', typeof result);
+        return [];
+      }
+      
+      return result.map((item: any) => ({
+        id: item.id || '',
+        name: item.name || 'Unnamed Workflow',
+        json: item.json || '{}',
+        status: (item.status || 'ENABLED') as 'ENABLED' | 'DISABLED',
+        data: safeJsonParse(item.json || '{}')
+      }));
     } catch (error) {
       console.error('Error getting workflows:', error);
       return [];
     }
-  }
+  },
 
-  // Получить workflow по ID
-  static async getById(id: string): Promise<Workflow | null> {
+  async getById(id: string): Promise<Workflow | null> {
     try {
-      const workflows = await this.getAll();
-      return workflows.find(w => w.id === id) || null;
+      const result = await DatabaseModule.getWorkflowById(id);
+      if (!result) return null;
+      
+      return {
+        id: result.id || id,
+        name: result.name || 'Unnamed Workflow',
+        json: result.json || '{}',
+        status: (result.status || 'ENABLED') as 'ENABLED' | 'DISABLED',
+        data: safeJsonParse(result.json || '{}')
+      };
     } catch (error) {
-      console.error('Error getting workflow by id:', error);
+      console.error('Error getting workflow:', error);
       return null;
     }
-  }
+  },
 
-  // Добавить новый workflow
-  static async add(data: any): Promise<string> {
+  async add(data: any): Promise<string> {
     try {
-      const workflows = await this.getAll();
-      const id = Date.now().toString();
-      const newWorkflow: Workflow = { id, data };
-      workflows.push(newWorkflow);
-      await AsyncStorage.setItem(WORKFLOWS_KEY, JSON.stringify(workflows));
+      const workflowData = typeof data === 'string' ? safeJsonParse(data) : data;
+      const id = await DatabaseModule.upsertWorkflow(
+        '', // новая запись
+        workflowData.title || workflowData.name || 'New Workflow',
+        JSON.stringify(workflowData),
+        'ENABLED'
+      );
       return id;
     } catch (error) {
       console.error('Error adding workflow:', error);
       throw error;
     }
-  }
+  },
 
-  // Обновить workflow
-  static async update(id: string, data: any): Promise<boolean> {
+  async update(id: string, data: any): Promise<void> {
     try {
-      const workflows = await this.getAll();
-      const index = workflows.findIndex(w => w.id === id);
-      if (index === -1) return false;
-      workflows[index].data = data;
-      await AsyncStorage.setItem(WORKFLOWS_KEY, JSON.stringify(workflows));
-      return true;
+      const workflowData = typeof data === 'string' ? safeJsonParse(data) : data;
+      await DatabaseModule.upsertWorkflow(
+        id,
+        workflowData.title || workflowData.name || 'Workflow',
+        JSON.stringify(workflowData),
+        'ENABLED'
+      );
     } catch (error) {
       console.error('Error updating workflow:', error);
-      return false;
+      throw error;
     }
-  }
+  },
 
-  // Удалить workflow
-  static async delete(id: string): Promise<boolean> {
+  async delete(id: string): Promise<void> {
     try {
-      const workflows = await this.getAll();
-      const filtered = workflows.filter(w => w.id !== id);
-      await AsyncStorage.setItem(WORKFLOWS_KEY, JSON.stringify(filtered));
-      return true;
+      await DatabaseModule.deleteWorkflow(id);
     } catch (error) {
       console.error('Error deleting workflow:', error);
-      return false;
+      throw error;
     }
-  }
+  },
 
-  // Очистить все данные
-  static async clear(): Promise<void> {
+  async getCount(): Promise<number> {
     try {
-      await AsyncStorage.removeItem(WORKFLOWS_KEY);
+      return await DatabaseModule.getWorkflowCount();
     } catch (error) {
-      console.error('Error clearing workflows:', error);
+      console.error('Error getting workflow count:', error);
+      return 0;
     }
   }
+};
 
-  // Принудительная инициализация (очистка + новые данные)
-  static async forceInit(): Promise<void> {
-    await this.clear();
-    await this.initWithSampleData();
-  }
+// Рабочие методы для Runs (History)
+export const HistoryDB = {
+  async forceInit() {
+    // Для нативной БД это не нужно
+    return Promise.resolve();
+  },
 
-  // Инициализация с тестовыми данными
-  static async initWithSampleData(): Promise<void> {
-    const existing = await this.getAll();
-    if (existing.length > 0) return;
-
-    const sampleWorkflows = [
-      {
-        title: "API Deploy",
-        description: "Deploy API to staging environment",
-        lastRun: "2 hours ago",
-        nodeCount: 4,
-        graph: {
-          nodes: [
-            { id: "1", type: "start", label: "Start", x: 100, y: 100 },
-            { id: "2", type: "build", label: "Build API", x: 250, y: 100 },
-            { id: "3", type: "test", label: "Run Tests", x: 400, y: 100 },
-            { id: "4", type: "deploy", label: "Deploy", x: 550, y: 100 }
-          ],
-          links: [
-            { source: "1", target: "2" },
-            { source: "2", target: "3" },
-            { source: "3", target: "4" }
-          ],
-          coords: {
-            "1": { x: 100, y: 100 },
-            "2": { x: 250, y: 100 },
-            "3": { x: 400, y: 100 },
-            "4": { x: 550, y: 100 }
-          }
-        }
-      },
-      {
-        title: "Database Backup",
-        description: "Automated database backup and sync",
-        lastRun: "1 day ago",
-        nodeCount: 5,
-        graph: {
-          nodes: [
-            { id: "1", type: "start", label: "Start", x: 100, y: 150 },
-            { id: "2", type: "backup", label: "Create Backup", x: 300, y: 150 },
-            { id: "3", type: "verify", label: "Verify", x: 500, y: 150 },
-            { id: "4", type: "sync", label: "Sync to Cloud", x: 300, y: 300 },
-            { id: "5", type: "end", label: "Complete", x: 500, y: 300 }
-          ],
-          links: [
-            { source: "1", target: "2" },
-            { source: "2", target: "3" },
-            { source: "2", target: "4" },
-            { source: "4", target: "5" }
-          ],
-          coords: {
-            "1": { x: 100, y: 150 },
-            "2": { x: 300, y: 150 },
-            "3": { x: 500, y: 150 },
-            "4": { x: 300, y: 300 },
-            "5": { x: 500, y: 300 }
-          }
-        }
-      },
-      {
-        title: "Code Review",
-        description: "Automated code quality checks",
-        lastRun: "3 hours ago",
-        nodeCount: 6,
-        graph: {
-          nodes: [
-            { id: "1", type: "start", label: "Start", x: 100, y: 200 },
-            { id: "2", type: "lint", label: "Lint Code", x: 250, y: 150 },
-            { id: "3", type: "test", label: "Unit Tests", x: 250, y: 250 },
-            { id: "4", type: "security", label: "Security Scan", x: 400, y: 200 },
-            { id: "5", type: "review", label: "Code Review", x: 550, y: 200 },
-            { id: "6", type: "end", label: "Approve", x: 700, y: 200 }
-          ],
-          links: [
-            { source: "1", target: "2" },
-            { source: "1", target: "3" },
-            { source: "2", target: "4" },
-            { source: "3", target: "4" },
-            { source: "4", target: "5" },
-            { source: "5", target: "6" }
-          ],
-          coords: {
-            "1": { x: 100, y: 200 },
-            "2": { x: 250, y: 150 },
-            "3": { x: 250, y: 250 },
-            "4": { x: 400, y: 200 },
-            "5": { x: 550, y: 200 },
-            "6": { x: 700, y: 200 }
-          }
-        }
-      },
-      {
-        title: "Build & Test",
-        description: "Run tests and build application",
-        lastRun: "30 min ago",
-        nodeCount: 8,
-        graph: {
-          nodes: [
-            { id: "1", type: "start", label: "Start", x: 100, y: 250 },
-            { id: "2", type: "install", label: "Install Deps", x: 250, y: 250 },
-            { id: "3", type: "lint", label: "Lint", x: 400, y: 200 },
-            { id: "4", type: "test", label: "Unit Tests", x: 400, y: 300 },
-            { id: "5", type: "integration", label: "Integration Tests", x: 550, y: 250 },
-            { id: "6", type: "build", label: "Build", x: 700, y: 250 },
-            { id: "7", type: "package", label: "Package", x: 850, y: 250 },
-            { id: "8", type: "end", label: "Complete", x: 1000, y: 250 }
-          ],
-          links: [
-            { source: "1", target: "2" },
-            { source: "2", target: "3" },
-            { source: "2", target: "4" },
-            { source: "3", target: "5" },
-            { source: "4", target: "5" },
-            { source: "5", target: "6" },
-            { source: "6", target: "7" },
-            { source: "7", target: "8" }
-          ],
-          coords: {
-            "1": { x: 100, y: 250 },
-            "2": { x: 250, y: 250 },
-            "3": { x: 400, y: 200 },
-            "4": { x: 400, y: 300 },
-            "5": { x: 550, y: 250 },
-            "6": { x: 700, y: 250 },
-            "7": { x: 850, y: 250 },
-            "8": { x: 1000, y: 250 }
-          }
-        }
-      },
-      {
-        title: "Security Scan",
-        description: "Vulnerability scanning workflow",
-        lastRun: "1 week ago",
-        nodeCount: 7,
-        graph: {
-          nodes: [
-            { id: "1", type: "start", label: "Start", x: 100, y: 300 },
-            { id: "2", type: "deps", label: "Scan Dependencies", x: 250, y: 250 },
-            { id: "3", type: "code", label: "Code Analysis", x: 250, y: 350 },
-            { id: "4", type: "secrets", label: "Secret Detection", x: 400, y: 300 },
-            { id: "5", type: "report", label: "Generate Report", x: 550, y: 300 },
-            { id: "6", type: "notify", label: "Send Alerts", x: 700, y: 250 },
-            { id: "7", type: "end", label: "Complete", x: 700, y: 350 }
-          ],
-          links: [
-            { source: "1", target: "2" },
-            { source: "1", target: "3" },
-            { source: "2", target: "4" },
-            { source: "3", target: "4" },
-            { source: "4", target: "5" },
-            { source: "5", target: "6" },
-            { source: "5", target: "7" }
-          ],
-          coords: {
-            "1": { x: 100, y: 300 },
-            "2": { x: 250, y: 250 },
-            "3": { x: 250, y: 350 },
-            "4": { x: 400, y: 300 },
-            "5": { x: 550, y: 300 },
-            "6": { x: 700, y: 250 },
-            "7": { x: 700, y: 350 }
-          }
-        }
+  async getAll(): Promise<WorkflowRun[]> {
+    try {
+      const result = await DatabaseModule.getAllRuns();
+      if (!Array.isArray(result)) {
+        console.warn('Expected array from getAllRuns, got:', typeof result);
+        return [];
       }
-    ];
 
-    for (const workflow of sampleWorkflows) {
-      await this.add(workflow);
-    }
-  }
-}
-export class HistoryDB {
-  // Получить всю историю
-  static async getAll(): Promise<WorkflowRun[]> {
-    try {
-      const data = await AsyncStorage.getItem(HISTORY_KEY);
-      return data ? JSON.parse(data) : [];
+      const runs: WorkflowRun[] = result.map((item: any) => ({
+        id: item.id || '',
+        workflowId: item.workflowId || '',
+        start: item.start || Date.now(),
+        end: item.end || 0,
+        status: (item.status || 'RUNNING') as 'RUNNING' | 'SUCCESS' | 'ERROR',
+        log: item.log || 'No log available'
+      }));
+
+      // Получаем имена workflow для каждого run
+      const runsWithNames = await Promise.all(
+        runs.map(async (run) => {
+          try {
+            if (!run.workflowId) {
+              return { ...run, workflowName: 'Unknown Workflow' };
+            }
+            
+            const workflow = await WorkflowDB.getById(run.workflowId);
+            return {
+              ...run,
+              workflowName: workflow?.name || 'Unknown Workflow'
+            };
+          } catch (error) {
+            console.error('Error getting workflow name for run:', run.id, error);
+            return {
+              ...run,
+              workflowName: 'Unknown Workflow'
+            };
+          }
+        })
+      );
+
+      return runsWithNames;
     } catch (error) {
-      console.error('Error getting history:', error);
+      console.error('Error getting runs:', error);
       return [];
     }
-  }
+  },
 
-  // Получить запуск по ID
-  static async getById(id: string): Promise<WorkflowRun | null> {
+  async add(workflowId: string, status: 'RUNNING' | 'SUCCESS' | 'ERROR', log: string): Promise<string> {
     try {
-      const history = await this.getAll();
-      return history.find(h => h.id === id) || null;
-    } catch (error) {
-      console.error('Error getting run by id:', error);
-      return null;
-    }
-  }
-
-  // Добавить новый запуск
-  static async add(run: Omit<WorkflowRun, 'id'>): Promise<string> {
-    try {
-      const history = await this.getAll();
-      const id = Date.now().toString();
-      const newRun: WorkflowRun = { id, ...run };
-      history.unshift(newRun); // Добавляем в начало (новые сверху)
-      await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+      const startTime = Date.now();
+      const id = await DatabaseModule.upsertRun(
+        '', // новая запись
+        workflowId,
+        status,
+        log,
+        startTime,
+        0 // endTime (0 = null)
+      );
       return id;
     } catch (error) {
       console.error('Error adding run:', error);
       throw error;
     }
-  }
+  },
 
-  // Очистить историю
-  static async clear(): Promise<void> {
+  async updateRunStatus(runId: string, status: 'SUCCESS' | 'ERROR', log: string): Promise<void> {
     try {
-      await AsyncStorage.removeItem(HISTORY_KEY);
-    } catch (error) {
-      console.error('Error clearing history:', error);
-    }
-  }
-
-  // Инициализация с тестовыми данными
-  static async initWithSampleData(): Promise<void> {
-    const existing = await this.getAll();
-    if (existing.length > 0) return;
-
-    const sampleRuns: Omit<WorkflowRun, 'id'>[] = [
-      {
-        workflowId: "1",
-        workflowName: "API Deploy",
-        startTime: "2024-01-09T08:30:00Z",
-        endTime: "2024-01-09T08:35:30Z",
-        duration: 330,
-        status: "Succeeded",
-        log: [
-          "[08:30:00] Starting API Deploy workflow",
-          "[08:30:15] Building API...",
-          "[08:32:45] Build completed successfully",
-          "[08:33:00] Running tests...",
-          "[08:34:30] All tests passed",
-          "[08:35:00] Deploying to staging...",
-          "[08:35:30] Deployment completed successfully"
-        ]
-      },
-      {
-        workflowId: "2",
-        workflowName: "Database Backup",
-        startTime: "2024-01-08T02:00:00Z",
-        endTime: "2024-01-08T02:15:45Z",
-        duration: 945,
-        status: "Succeeded",
-        log: [
-          "[02:00:00] Starting Database Backup workflow",
-          "[02:00:30] Creating database backup...",
-          "[02:10:15] Backup created successfully (2.3GB)",
-          "[02:10:30] Verifying backup integrity...",
-          "[02:12:00] Backup verification passed",
-          "[02:12:15] Syncing to cloud storage...",
-          "[02:15:45] Sync completed successfully"
-        ]
-      },
-      {
-        workflowId: "1",
-        workflowName: "API Deploy",
-        startTime: "2024-01-07T14:20:00Z",
-        endTime: "2024-01-07T14:22:15Z",
-        duration: 135,
-        status: "Error",
-        log: [
-          "[14:20:00] Starting API Deploy workflow",
-          "[14:20:15] Building API...",
-          "[14:21:30] Build completed successfully",
-          "[14:21:45] Running tests...",
-          "[14:22:00] ERROR: Test 'user-auth-test' failed",
-          "[14:22:15] Workflow terminated due to test failures"
-        ]
-      },
-      {
-        workflowId: "2",
-        workflowName: "Database Backup",
-        startTime: "2024-01-06T02:00:00Z",
-        endTime: "2024-01-06T02:08:30Z",
-        duration: 510,
-        status: "Error",
-        log: [
-          "[02:00:00] Starting Database Backup workflow",
-          "[02:00:30] Creating database backup...",
-          "[02:05:15] ERROR: Insufficient disk space",
-          "[02:05:30] Attempting cleanup...",
-          "[02:07:00] ERROR: Cleanup failed",
-          "[02:08:30] Workflow terminated due to storage issues"
-        ]
+      // Сначала получаем существующий run
+      const existingRun = await this.getById(runId);
+      if (!existingRun) {
+        throw new Error('Run not found');
       }
-    ];
 
-    for (const run of sampleRuns) {
-      await this.add(run);
+      const endTime = Date.now();
+      await DatabaseModule.upsertRun(
+        runId,
+        existingRun.workflowId,
+        status,
+        log,
+        existingRun.start,
+        endTime
+      );
+    } catch (error) {
+      console.error('Error updating run:', error);
+      throw error;
+    }
+  },
+
+  async getById(id: string): Promise<WorkflowRun | null> {
+    try {
+      const result = await DatabaseModule.getRunById(id);
+      if (!result) return null;
+
+      const run: WorkflowRun = {
+        id: result.id || id,
+        workflowId: result.workflowId || '',
+        start: result.start || Date.now(),
+        end: result.end || 0,
+        status: (result.status || 'RUNNING') as 'RUNNING' | 'SUCCESS' | 'ERROR',
+        log: result.log || 'No log available'
+      };
+
+      // Получаем имя workflow
+      if (run.workflowId) {
+        try {
+          const workflow = await WorkflowDB.getById(run.workflowId);
+          if (workflow) {
+            run.workflowName = workflow.name;
+          }
+        } catch (error) {
+          console.error('Error getting workflow for run:', error);
+        }
+      }
+
+      return run;
+    } catch (error) {
+      console.error('Error getting run:', error);
+      return null;
+    }
+  },
+
+  async delete(id: string): Promise<void> {
+    try {
+      await DatabaseModule.deleteRun(id);
+    } catch (error) {
+      console.error('Error deleting run:', error);
+      throw error;
+    }
+  },
+
+  async deleteByWorkflowId(workflowId: string): Promise<void> {
+    try {
+      // Получаем все runs для этого workflow и удаляем по одному
+      const allRuns = await this.getAll();
+      const runsToDelete = allRuns.filter(run => run.workflowId === workflowId);
+      
+      for (const run of runsToDelete) {
+        await this.delete(run.id);
+      }
+    } catch (error) {
+      console.error('Error deleting runs by workflow id:', error);
+      throw error;
+    }
+  },
+
+  async clearAll(): Promise<void> {
+    try {
+      const allRuns = await this.getAll();
+      for (const run of allRuns) {
+        try {
+          await this.delete(run.id);
+        } catch (error) {
+          console.error('Error deleting run:', run.id, error);
+        }
+      }
+    } catch (error) {
+      console.error('Error clearing all runs:', error);
+      throw error;
+    }
+  },
+
+  async getCount(): Promise<number> {
+    try {
+      return await DatabaseModule.getRunCount();
+    } catch (error) {
+      console.error('Error getting run count:', error);
+      return 0;
+    }
+  },
+
+  async getRunsByWorkflowId(workflowId: string): Promise<WorkflowRun[]> {
+    try {
+      const allRuns = await this.getAll();
+      return allRuns.filter(run => run.workflowId === workflowId);
+    } catch (error) {
+      console.error('Error getting runs by workflow id:', error);
+      return [];
     }
   }
-}
+};
+
+// Экспортируем типы для использования в других файлах
+export type { Workflow, WorkflowRun };
+
+// Утилиты для форматирования
+export const DatabaseUtils = {
+  formatTimestamp(timestamp: number): string {
+    if (!timestamp || timestamp <= 0) return 'Never';
+    
+    const date = new Date(timestamp);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+  },
+
+  formatDuration(start: number, end: number): string {
+    if (!end || end <= 0) return 'Running...';
+    
+    const seconds = Math.floor((end - start) / 1000);
+    if (seconds < 60) return `${seconds}s`;
+    
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}m ${secs}s`;
+  },
+
+  truncateText(text: string, maxLength: number = 50): string {
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + '...';
+  }
+};
+
+// Дефолтный экспорт для удобства
+export default {
+  WorkflowDB,
+  HistoryDB,
+  DatabaseUtils
+};
