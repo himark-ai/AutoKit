@@ -1,10 +1,12 @@
 // app/workflows/[id].tsx
 import { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, Save, Play, Trash2 } from 'lucide-react-native';
 import { WorkflowDB, HistoryDB } from '@/lib/database';
+
+import GraphApp from '@/src/components/graph/graph';
 
 const DEFAULT_WORKFLOW_TEMPLATE = {
   title: "New Workflow",
@@ -220,113 +222,12 @@ export default function WorkflowEditor() {
       </SafeAreaView>
     );
   }
-
+  
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#131314" }}>
-      <View className="flex-1 bg-google-bg px-6">
-        {/* Заголовок */}
-        <View className="flex-row items-center justify-between mb-6 mt-4">
-          <View className="flex-row items-center">
-            <TouchableOpacity onPress={() => router.back()} className="mr-4">
-              <ArrowLeft color="white" size={24} />
-            </TouchableOpacity>
-            <Text className="text-white font-google text-xl">
-              {workflow?.name || 'Edit Workflow'}
-            </Text>
-          </View>
-          
-          <View className="flex-row">
-            <TouchableOpacity 
-              className="w-10 h-10 bg-blue-500/20 rounded-xl items-center justify-center mr-2"
-              onPress={runWorkflow}
-            >
-              <Play color="#8ab4f8" size={20} />
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              className="w-10 h-10 bg-red-500/20 rounded-xl items-center justify-center mr-2"
-              onPress={deleteWorkflow}
-            >
-              <Trash2 color="#ef4444" size={20} />
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              className="w-10 h-10 bg-green-500/20 rounded-xl items-center justify-center"
-              onPress={saveWorkflow}
-              disabled={saving}
-            >
-              {saving ? (
-                <ActivityIndicator size="small" color="#22c55e" />
-              ) : (
-                <Save color="#22c55e" size={20} />
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Форма редактирования */}
-        <ScrollView showsVerticalScrollIndicator={false}>
-          <View className="mb-4">
-            <View className="flex-row justify-between items-center mb-2">
-              <Text className="text-gray-400 font-google text-sm">Workflow Name</Text>
-              <TouchableOpacity 
-                className="bg-blue-500/20 px-3 py-1 rounded-lg"
-                onPress={previewJson}
-              >
-                <Text className="text-blue-400 font-google text-xs">Preview JSON</Text>
-              </TouchableOpacity>
-            </View>
-            <TextInput
-              className="bg-google-card text-white font-google p-3 rounded-xl"
-              value={formData.name}
-              onChangeText={(text) => setFormData({...formData, name: text})}
-              placeholder="Enter workflow name"
-              placeholderTextColor="#6b7280"
-            />
-          </View>
-
-          <View className="mb-4">
-            <Text className="text-gray-400 font-google text-sm mb-2">Workflow JSON</Text>
-            <TextInput
-              className="bg-google-card text-white font-google p-3 rounded-xl min-h-[400px]"
-              value={formData.json}
-              onChangeText={handleJsonChange}
-              placeholder="Enter workflow JSON"
-              placeholderTextColor="#6b7280"
-              multiline
-              textAlignVertical="top"
-              style={{ height: 400 }}
-            />
-          </View>
-
-          <View className="mb-8">
-            <Text className="text-gray-500 font-google text-xs mb-2">
-              Required JSON structure:
-            </Text>
-            <View className="bg-gray-900/50 p-3 rounded-lg">
-              <Text className="text-gray-400 font-google text-xs font-mono">
-                {"{\n" +
-                '  "title": "Workflow Name",\n' +
-                '  "description": "Description",\n' +
-                '  "lastRun": "Never",\n' +
-                '  "nodeCount": 3,\n' +
-                '  "graph": {\n' +
-                '    "nodes": [\n' +
-                '      {"id": "1", "type": "start", "label": "Start", "x": 100, "y": 200}\n' +
-                '    ],\n' +
-                '    "links": [\n' +
-                '      {"source": "1", "target": "2"}\n' +
-                '    ],\n' +
-                '    "coords": {\n' +
-                '      "1": {"x": 100, "y": 200}\n' +
-                '    }\n' +
-                '  }\n' +
-                "}"}
-              </Text>
-            </View>
-          </View>
-        </ScrollView>
-      </View>
+    <SafeAreaView style={{flex: 1, backgroundColor: '#111'}}>
+      <StatusBar barStyle="light-content" />
+      {/* Просто вызываем ваш компонент как обычный тег */}
+      <GraphApp />
     </SafeAreaView>
   );
 }
