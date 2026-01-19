@@ -72,7 +72,6 @@ export default function WorkflowEditor() {
         workflowData.graph.links = links;
         workflowData.graph.coords = nodesStore;
         workflowData.nodeCount = nodes.length;
-        console.log('Prepared workflow data for saving:', workflowData);
       } catch (error: any) {
         Alert.alert("Invalid JSON", `Error: ${error.message}`);
         return;
@@ -112,20 +111,6 @@ export default function WorkflowEditor() {
       setSaving(false);
     }
   }, [nodes, links, nodesStore, workflow, formData, id]);
-
-  // const saveWorkflow = useCallback(async () => {
-  //   try {
-  //     await WorkflowDB.update(`@workflow_nodes_${id}`, nodes);
-  //     await WorkflowDB.update(`@workflow_links_${id}`, links);
-  //     await WorkflowDB.update(`@workflow_nodesStore_${id}`, nodesStore.value);
-  //     alert('Graph is saved!');
-  //   } catch (err: any) {
-  //     console.error('Error saving workflow:', err);
-  //     Alert.alert('Error', err.message || 'Failed to save workflow');
-  //   } finally {
-  //     setSaving(false);
-  //   }
-  // }, [nodes, links, nodesStore, workflow, formData, id]);
 
   const runWorkflow = async () => {
     if (!workflow) return;

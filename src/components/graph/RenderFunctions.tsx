@@ -191,7 +191,7 @@ export const MinimapNode = ({ id, store, OFF }) => {
         y={0}
         width={nodeData.width}
         height={nodeData.height}
-        color="white"
+        color="black"
       />
     </Group>
   );
@@ -227,7 +227,7 @@ export const styles = StyleSheet.create({
     right: 20,
     width: MINIMAP_SIZE,
     height: MINIMAP_SIZE,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgb(255, 255, 255)',
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#555',

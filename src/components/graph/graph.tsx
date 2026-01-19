@@ -10,6 +10,7 @@ import { SelectionRect } from '@/src/components/interface/areaSelection';
 import { PORT_RADIUS } from '@/src/components/nodes/Node';
 import { NodeMenuOverlay } from '@/src/components/interface/nodeFloatMenu';
 import { runOnJS } from 'react-native-worklets';
+import { Play, Plus, Trash2, Save } from "lucide-react-native";
 import {MINIMAP_SIZE, WORLD_SIZE, MIN_SCALE, MAX_SCALE, EDGE_MARGIN, EPSILON_PORT_HITBOX, AUTO_PAN_SPEED, FONT_SIZE, ICON_FONT_SIZE, RIGHT_MARGIN, OFF} from './constants';
 
 const { GraphEngine } = NativeModules;
@@ -263,6 +264,7 @@ export default function GraphApp({ nodes, setNodes, links, setLinks, nodesStore,
     const pan = Gesture.Pan()
       .maxPointers(1)
       .onBegin((e) => {
+        runOnJS(setSidebarOpen)(false);
         autoPanAccum.value = { x: 0, y: 0 };
         isConnecting.value = false;
         const adjX = (e.x - translateX.value) / scale.value;
@@ -582,16 +584,17 @@ export default function GraphApp({ nodes, setNodes, links, setLinks, nodesStore,
         <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onAddNode={(type) => addNodeOfType(type)} />
         <View style={[styles.menu, { marginLeft: sidebarOpen ? 240 : 0 }]}> 
           <TouchableOpacity style={styles.menuBtn} onPress={() => setSidebarOpen(v => !v)}>
-            <Text style={styles.menuText}>{sidebarOpen ? 'Hide Library' : 'Show Library'}</Text>
+            <Plus color="cyan" size={16} />
+            {/* <Text style={styles.menuText}>{sidebarOpen ? 'Hide Library' : 'Show Library'}</Text> */}
           </TouchableOpacity>
           <TouchableOpacity style={styles.menuBtn} onPress={onRun}>
-            <Text style={styles.menuText}>Run</Text>
+          <Play color="cyan" size={16} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.menuBtn} onPress={onDelete}>
-            <Text style={styles.menuText}>Delete</Text>
+            <Trash2 color="cyan" size={16} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.menuBtn} onPress={onSave}>
-            <Text style={styles.menuText}>Save</Text>
+          <Save color="cyan" size={16} />
           </TouchableOpacity>
         </View>
         <GestureDetector gesture={composedGesture}>

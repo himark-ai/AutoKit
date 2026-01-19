@@ -119,7 +119,6 @@ export default function Workflows() {
     try {
       setLoading(true);
       const data = await WorkflowDB.getAll();
-      console.log('Loaded workflows:', data);
       setWorkflows(data);
     } catch (error) {
       console.error('Error loading workflows:', error);
