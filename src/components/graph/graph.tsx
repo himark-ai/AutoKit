@@ -1,12 +1,3 @@
-// import { View, TouchableOpacity, Text, useWindowDimensions, NativeModules } from 'react-native';
-// export default function GraphApp() {
-//   return (
-//     <View>
-//       <Text>GraphApp</Text>
-//     </View>
-//   );
-// }
-
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { View, TouchableOpacity, Text, useWindowDimensions, NativeModules } from 'react-native';
 import { Canvas, Group, useFont, Rect } from '@shopify/react-native-skia';
@@ -584,6 +575,15 @@ export default function GraphApp({ nodes, setNodes, links, setLinks, nodesStore,
           <TouchableOpacity style={styles.menuBtn} onPress={() => setSidebarOpen(v => !v)}>
             <Text style={styles.menuText}>{sidebarOpen ? 'Hide Library' : 'Show Library'}</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={styles.menuBtn} onPress={onRun}>
+            <Text style={styles.menuText}>Run</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.menuBtn} onPress={onDelete}>
+            <Text style={styles.menuText}>Delete</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.menuBtn} onPress={onSave}>
+            <Text style={styles.menuText}>Save</Text>
+          </TouchableOpacity>
         </View>
         <GestureDetector gesture={composedGesture}>
           <Canvas style={styles.canvas}>
@@ -629,12 +629,6 @@ export default function GraphApp({ nodes, setNodes, links, setLinks, nodesStore,
             onAction={handleMenuAction}
           />
         )}
-
-        <View style={{ flexDirection: 'row', justifyContent: 'space-around', padding: 12 }}>
-          <TouchableOpacity onPress={onRun}><Text>Run</Text></TouchableOpacity>
-          <TouchableOpacity onPress={onDelete}><Text>Delete</Text></TouchableOpacity>
-          <TouchableOpacity onPress={onSave} disabled={saving}><Text>{saving ? 'Saving...' : 'Save'}</Text></TouchableOpacity>
-        </View>
 
       </View>
     </GestureHandlerRootView>

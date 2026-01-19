@@ -34,25 +34,29 @@ export default function WorkflowEditor() {
   const loadWorkflow = useCallback(async () => {
     try {
       setLoading(true);
-      console.log('=== Loading workflow ===');
-
-      const jsonValue = await WorkflowDB.getById(`@workflow_${id}`);
-      if (!jsonValue) return;
-      const savedData = JSON.parse(jsonValue.json);
-
-      nodesStore.modify((val) => {
-        'worklet';
-        for (const k in val) delete val[k];
-        Object.assign(val, savedData.coords);
-        return val;
-      });
-
-      setNodes(savedData.nodes);
-      setLinks(savedData.links);
-      Alert.alert('Success', 'Workflow loaded!');
-    } catch (e) {
-      console.error('Error loading workflow:', e);
-      Alert.alert('Error', 'Failed to load workflow');
+      const data = await WorkflowDB.getById(id as string);
+      if (data) {
+        setWorkflow(data);
+        const parsed = JSON.parse(data.json);
+        nodesStore.modify((val) => {
+          'worklet';
+          for (const k in val) delete val[k];
+          Object.assign(val, parsed.graph.coords.value);
+          return val;
+        });
+        setNodes(parsed.graph.nodes);
+        setLinks(parsed.graph.links);
+        setFormData({
+          name: data.name,
+          json: data.json
+        });
+      } else {
+        Alert.alert("Error", "Workflow not found");
+        router.back();
+      }
+    } catch (error) {
+      console.error('Error loading workflow:', error);
+      Alert.alert("Error", "Failed to load workflow");
     } finally {
       setLoading(false);
     }
@@ -60,16 +64,66 @@ export default function WorkflowEditor() {
 
   const saveWorkflow = useCallback(async () => {
     try {
-      const dataToSave = { nodes, links, coords: nodesStore.value };
-      await WorkflowDB.update(`@workflow_${id}`,dataToSave);
-      alert('Graph is saved!');
-    } catch (err: any) {
-      console.error('Error saving workflow:', err);
-      Alert.alert('Error', err.message || 'Failed to save workflow');
+      setSaving(true);
+      let workflowData;
+      try {
+        workflowData = JSON.parse(formData.json);
+        workflowData.graph.nodes = nodes;
+        workflowData.graph.links = links;
+        workflowData.graph.coords = nodesStore;
+      } catch (error: any) {
+        Alert.alert("Invalid JSON", `Error: ${error.message}`);
+        return;
+      }
+
+      // Проверяем обязательные поля
+      if (!workflowData.title && !formData.name) {
+        Alert.alert("Missing Title", "Please provide a workflow name");
+        return;
+      }
+      
+      if (!workflowData.graph) {
+        Alert.alert("Invalid Workflow", "Workflow must contain a graph");
+        return;
+      }
+
+      const workflowName = formData.name || workflowData.title || 'New Workflow';
+      
+      await WorkflowDB.update(id as string, {
+        ...workflowData,
+        title: workflowName
+      });
+      
+      Alert.alert("Success", "Workflow updated successfully");
+      
+      // Обновляем локальное состояние
+      setWorkflow({
+        ...workflow,
+        name: workflowName,
+        json: JSON.stringify(workflowData, null, 2)
+      });
+      
+    } catch (error: any) {
+      console.error('Error saving workflow:', error);
+      Alert.alert("Error", error.message || "Failed to save workflow");
     } finally {
       setSaving(false);
     }
   }, [nodes, links, nodesStore, workflow, formData, id]);
+
+  // const saveWorkflow = useCallback(async () => {
+  //   try {
+  //     await WorkflowDB.update(`@workflow_nodes_${id}`, nodes);
+  //     await WorkflowDB.update(`@workflow_links_${id}`, links);
+  //     await WorkflowDB.update(`@workflow_nodesStore_${id}`, nodesStore.value);
+  //     alert('Graph is saved!');
+  //   } catch (err: any) {
+  //     console.error('Error saving workflow:', err);
+  //     Alert.alert('Error', err.message || 'Failed to save workflow');
+  //   } finally {
+  //     setSaving(false);
+  //   }
+  // }, [nodes, links, nodesStore, workflow, formData, id]);
 
   const runWorkflow = async () => {
     if (!workflow) return;
