@@ -71,6 +71,8 @@ export default function WorkflowEditor() {
         workflowData.graph.nodes = nodes;
         workflowData.graph.links = links;
         workflowData.graph.coords = nodesStore;
+        workflowData.nodeCount = nodes.length;
+        console.log('Prepared workflow data for saving:', workflowData);
       } catch (error: any) {
         Alert.alert("Invalid JSON", `Error: ${error.message}`);
         return;
