@@ -5,10 +5,10 @@ import com.facebook.react.bridge.NativeModule
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.uimanager.ViewManager
 
-class AutokitPackage : ReactPackage {
+class Package : ReactPackage {
     // Регистрация нативных модулей (логика)
     override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
-        return listOf(DatabaseModule(reactContext))
+        return listOf(tech.autokit.database.Module(reactContext))
     }
 
     // Регистрация нативных View (если бы мы создавали свои кнопки/графики)

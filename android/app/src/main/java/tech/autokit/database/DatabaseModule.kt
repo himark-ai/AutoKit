@@ -1,11 +1,11 @@
-package tech.autokit
+package tech.autokit.database
 
 import com.facebook.react.bridge.*
 import kotlinx.coroutines.*
 import java.util.Date
 import java.util.UUID
 
-class DatabaseModule(
+class Module(
     reactContext: ReactApplicationContext,
 ) : ReactContextBaseJavaModule(reactContext) {
     private val db = Storage.getDatabase(reactContext)
@@ -110,7 +110,7 @@ class DatabaseModule(
     @ReactMethod
     fun upsertRun(
         id: String,
-        workflowId: String,
+        workflow: String,
         status: String,
         log: String,
         startTime: Double,
@@ -121,7 +121,7 @@ class DatabaseModule(
             try {
                 val run = Run(
                     id = if (id.isEmpty()) UUID.randomUUID().toString() else id,
-                    workflowId = workflowId,
+                    workflow = workflow,
                     start = if (startTime > 0) Date(startTime.toLong()) else Date(),
                     end = if (endTime > 0) Date(endTime.toLong()) else null,
                     status = RunStatus.valueOf(status.uppercase()),
@@ -143,7 +143,7 @@ class DatabaseModule(
                 if (run != null) {
                     val map = Arguments.createMap().apply {
                         putString("id", run.id)
-                        putString("workflowId", run.workflowId)
+                        putString("workflow", run.workflow)
                         putDouble("start", run.start.time.toDouble())
                         putDouble("end", run.end?.time?.toDouble() ?: 0.0)
                         putString("status", run.status.name)
@@ -168,7 +168,7 @@ class DatabaseModule(
                 list.forEach { run ->
                     val map = Arguments.createMap().apply {
                         putString("id", run.id)
-                        putString("workflowId", run.workflowId)
+                        putString("workflow", run.workflow)
                         putDouble("start", run.start.time.toDouble())
                         putDouble("end", run.end?.time?.toDouble() ?: 0.0)
                         putString("status", run.status.name)

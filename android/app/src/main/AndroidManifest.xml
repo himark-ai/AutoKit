@@ -30,7 +30,7 @@
     </activity>
 
     <receiver
-      android:name=".Trigger"
+      android:name=".core.Receiver"
       android:exported="true">
       <intent-filter>
         <action android:name="android.intent.action.BOOT_COMPLETED" />
@@ -39,7 +39,7 @@
     </receiver>
 
     <service
-      android:name=".Engine"
+      android:name=".core.Service"
       android:foregroundServiceType="specialUse"
       android:exported="false" />
 
@@ -50,6 +50,14 @@
       android:exported="true">
       <intent-filter>
           <action android:name="android.service.notification.NotificationListenerService" />
+      </intent-filter>
+    </service>
+
+    <service
+      android:name="tech.autokit.builtin.Plugin"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="tech.autokit.intent.action.EXTENSION" />
       </intent-filter>
     </service>
 
