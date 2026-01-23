@@ -19,7 +19,7 @@ class MainActivity : ReactActivity() {
     setTheme(R.style.AppTheme);
     super.onCreate(null)
 
-    val intent = Intent(this, Engine::class.java)
+    val intent = Intent(this, tech.autokit.core.Service::class.java)
     startForegroundService(intent)
   }
 

@@ -39,7 +39,7 @@
     </receiver>
 
     <service
-      android:name=".Engine"
+      android:name=".core.Service"
       android:foregroundServiceType="specialUse"
       android:exported="false" />
 
