@@ -16,7 +16,6 @@ import {
   KeyRound,
   LayoutGrid,
   History,
-  Bug,
 } from "lucide-react-native";
 
 const { DatabaseModule } = NativeModules;
@@ -112,13 +111,6 @@ export default function App() {
             icon={History}
             iconBg="bg-blue-500/80"
             href="/history"
-          />
-          <MenuCard
-            title="Test"
-            count={1}
-            icon={Bug}
-            iconBg="bg-black"
-            href="/test"
           />
         </ScrollView>
       </View>
