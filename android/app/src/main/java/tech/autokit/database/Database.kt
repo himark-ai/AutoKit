@@ -1,4 +1,4 @@
-package tech.autokit
+package tech.autokit.database
 
 import android.content.Context
 import androidx.room.*
@@ -25,15 +25,15 @@ enum class RunStatus { RUNNING, SUCCESS, ERROR }
         ForeignKey(
             entity = Workflow::class,
             parentColumns = ["id"],
-            childColumns = ["workflowId"],
+            childColumns = ["workflow"],
             onDelete = ForeignKey.CASCADE
         )
     ],
-    indices = [Index("workflowId")]
+    indices = [Index("workflow")]
 )
 data class Run(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
-    val workflowId: String,
+    val workflow: String,
     val start: Date,
     val end: Date?,
     val status: RunStatus,
@@ -52,6 +52,9 @@ interface WorkflowDao {
 
     @Query("SELECT * FROM workflows")
     suspend fun getAll(): List<Workflow>
+
+    @Query("SELECT * FROM workflows WHERE status = 'ENABLED'")
+    suspend fun getActive(): List<Workflow>
 
     @Query("SELECT COUNT(*) FROM workflows")
     suspend fun getCount(): Int
