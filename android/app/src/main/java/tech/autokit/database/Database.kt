@@ -111,9 +111,13 @@ class Converter {
 
 //
 
-@Database(entities = [Workflow::class, Run::class], version = 1)
+@Database(
+    entities = [Workflow::class, Run::class],
+    version = 2
+)
 @TypeConverters(Converter::class)
 abstract class Storage : RoomDatabase() {
+
     abstract fun workflowDao(): WorkflowDao
     abstract fun runDao(): RunDao
 
@@ -127,7 +131,9 @@ abstract class Storage : RoomDatabase() {
                     context.applicationContext,
                     Storage::class.java,
                     "autokit_db"
-                ).build()
+                )
+                    .fallbackToDestructiveMigration()
+                    .build()
                 INSTANCE = instance
                 instance
             }
