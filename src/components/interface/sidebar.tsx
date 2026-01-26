@@ -54,9 +54,6 @@ export function Sidebar({ open, onClose, onAddNode }) {
     }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
         <Text style={{ color: '#fff', fontWeight: '700', flex: 1 }}>Nodes</Text>
-        <TouchableOpacity onPress={onClose} style={{ padding: 6 }}>
-          <Text style={{ color: '#9ca3af' }}>Close</Text>
-        </TouchableOpacity>
       </View>
 
       <TextInput

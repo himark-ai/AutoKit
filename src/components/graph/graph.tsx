@@ -3,6 +3,7 @@ import { View, TouchableOpacity, Text, useWindowDimensions, NativeModules, BackH
 import { Canvas, Group, useFont, Rect } from '@shopify/react-native-skia';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSharedValue, makeMutable, clamp, withSpring, useDerivedValue, useFrameCallback } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { MinimapNode, RenderTempLine, RenderLink, styles } from '@/src/components/graph/RenderFunctions';
 import { nodeFactory, NodeRenderer } from '@/src/components/nodes/nodeFactory';
 import { Sidebar } from '@/src/components/interface/sidebar';
@@ -10,7 +11,7 @@ import { SelectionRect } from '@/src/components/interface/areaSelection';
 import { PORT_RADIUS } from '@/src/components/nodes/Node';
 import { NodeMenuOverlay } from '@/src/components/interface/nodeFloatMenu';
 import { runOnJS } from 'react-native-worklets';
-import { Play, Plus, Trash2, Save } from "lucide-react-native";
+import { Play, Eraser, Menu} from "lucide-react-native";
 import {MINIMAP_SIZE, WORLD_SIZE, MIN_SCALE, MAX_SCALE, EDGE_MARGIN, EPSILON_PORT_HITBOX, AUTO_PAN_SPEED, FONT_SIZE, ICON_FONT_SIZE, RIGHT_MARGIN, OFF} from './constants';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from 'expo-router';
@@ -20,14 +21,14 @@ type GraphAppProps = {
   setNodes: (nodes: any[]) => void;
   links: any[];
   setLinks: (links: any[]) => void;
-  nodesStore: any; // shared value, где хранятся координаты
+  nodesStore: any;
   onSave: () => void;
   onRun: () => void;
   onDelete: () => void;
   saving: boolean;
 };
 
-export default function GraphApp({ nodes, setNodes, links, setLinks, nodesStore, onSave, onRun, onDelete, saving }: GraphAppProps) {
+export default function GraphApp({ nodes, setNodes, links, setLinks, nodesStore, onSave }: GraphAppProps) {
   const MINIMAP_RATIO = MINIMAP_SIZE / WORLD_SIZE;
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
@@ -89,6 +90,17 @@ export default function GraphApp({ nodes, setNodes, links, setLinks, nodesStore,
       }
     });
   }, [nodes]);
+
+  const sidebarX = useSharedValue(-240);
+  useEffect(() => {
+    sidebarX.value = withTiming(
+      sidebarOpen ? 0 : -240,
+      { duration: 250 }
+    );
+  }, [sidebarOpen]);
+  const sidebarStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: sidebarX.value }],
+  }));
 
   const activeNodeId = useSharedValue(null);
   const isConnecting = useSharedValue(false);
@@ -277,6 +289,36 @@ export default function GraphApp({ nodes, setNodes, links, setLinks, nodesStore,
       return updatedLinks;
     });
   }, [recalculateGraphIds, nodesStore]);
+
+  const clearGraph = useCallback(() => {
+    Alert.alert(
+      "Clear Graph?",
+      "Are you sure you want to remove all nodes and links?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Clear", style: "destructive", onPress: () => {
+          setLinks([]);
+          setNodes([]);
+          nodesStore.modify(val => {
+            'worklet';
+            for (const key in val) delete val[key];
+            return val;
+          })
+          activeNodeId.value = null;
+          selectedNodeIds.value = [];
+          selectionRect.value = { x1:0, y1:0, x2:0, y2:0, active:false };
+          tempLine.value = { x1:0, y1:0, x2:0, y2:0 };
+          isConnecting.value = false;
+        }},
+      ]
+    );
+  }, [nodesStore, setNodes, setLinks, activeNodeId, selectedNodeIds, selectionRect, tempLine, isConnecting]);
+
+  const runGraph = useCallback(() => {
+    Alert.alert(
+      "Run Graph?",
+      "Are you sure you want to run the graph?",)
+  });
 
   const handleDisconnect = useCallback((targetNodeId, portIndex, portType, currentX, currentY) => {
     setLinks(prev => {
@@ -620,37 +662,45 @@ export default function GraphApp({ nodes, setNodes, links, setLinks, nodesStore,
     <SafeAreaView style={{ flex: 1, backgroundColor: "#131314" }}>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <View style={styles.container}>
-          <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onAddNode={(type) => addNodeOfType(type)} />
-          <View style={[styles.menu, { marginLeft: sidebarOpen ? 240 : 0 }]}> 
-            <TouchableOpacity style={styles.menuBtn} onPress={() => setSidebarOpen(v => !v)}>
-              <Plus color="cyan" size={16} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.menuBtn} onPress={onRun}>
-            <Play color="cyan" size={16} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.menuBtn} onPress={onDelete}>
-              <Trash2 color="cyan" size={16} />
-            </TouchableOpacity>
+          <Animated.View style={[styles.sidebar, sidebarStyle]}>
+            <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onAddNode={(type) => addNodeOfType(type)}/>
+          </Animated.View>
+          <View style={styles.topBar}>
+            <View style={styles.leftBar}>
+              {!sidebarOpen && (
+                <TouchableOpacity style={styles.menuBtn} onPress={() => setSidebarOpen(true)}>
+                  <Menu color="cyan" size={16} />
+                </TouchableOpacity>
+              )}
+            </View>
+            <View style={styles.rightBar}>
+              <TouchableOpacity style={styles.menuBtn} onPress={runGraph}>
+                <Play color="cyan" size={16} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.menuBtn} onPress={clearGraph}>
+                <Eraser color="cyan" size={16} />
+              </TouchableOpacity>
+            </View>
           </View>
+
           <GestureDetector gesture={composedGesture}>
             <Canvas style={styles.canvas}>
               <Group transform={sceneTransform}>
                 {links.map(l => (
-                  <RenderLink key={l.id} fromId={l.from} toId={l.to} portFrom={l.portFrom} portTo={l.portTo} additionalPort={l.additionalPort} store={nodesStore} />
+                  <RenderLink key={l.id} fromId={l.from} toId={l.to} portFrom={l.portFrom} portTo={l.portTo} additionalPort={l.additionalPort} store={nodesStore}/>
                 ))}
 
                 <RenderTempLine tempLine={tempLine} isConnecting={isConnecting} />
 
                 {nodes.map(n => n.id === activeNodeIdJS ? null : (
-                  <NodeRenderer key={n.id} id={n.id} store={nodesStore} font={font} iconFont={iconFont} />
+                    <NodeRenderer key={n.id} id={n.id} store={nodesStore} font={font} iconFont={iconFont}/>
                 ))}
 
                 {activeNodeIdJS && (
-                  <NodeRenderer key={`active-${activeNodeIdJS}`} id={activeNodeIdJS} store={nodesStore} font={font} iconFont={iconFont} />
+                  <NodeRenderer key={`active-${activeNodeIdJS}`} id={activeNodeIdJS} store={nodesStore} font={font} iconFont={iconFont}/>
                 )}
 
                 <SelectionRect selectionSV={selectionRect} />
-
               </Group>
             </Canvas>
           </GestureDetector>
@@ -659,24 +709,13 @@ export default function GraphApp({ nodes, setNodes, links, setLinks, nodesStore,
             <View style={styles.minimapContainer}>
               <Canvas style={{ width: MINIMAP_SIZE, height: MINIMAP_SIZE }}>
                 <Group transform={minimapContentTransform}>
-                  {nodes.map(n => <MinimapNode key={n.id} id={n.id} store={nodesStore} OFF={OFF} />)}
+                  {nodes.map(n => (<MinimapNode key={n.id} id={n.id} store={nodesStore} OFF={OFF}/>))}
                 </Group>
-                <Rect x={vX} y={vY} width={vW} height={vH} color="green" style="stroke" strokeWidth={2} />
+                <Rect x={vX} y={vY} width={vW} height={vH} color="green" style="stroke" strokeWidth={2}/>
               </Canvas>
             </View>
           </GestureDetector>
-
-          {activeMenu && (
-            <NodeMenuOverlay
-              visible={!!activeMenu}
-              x={activeMenu.x}
-              y={activeMenu.y}
-              width={activeMenu.width}
-              scale={activeMenu.scale}
-              onAction={handleMenuAction}
-            />
-          )}
-
+          {activeMenu && (<NodeMenuOverlay visible x={activeMenu.x} y={activeMenu.y} width={activeMenu.width} scale={activeMenu.scale} onAction={handleMenuAction}/>)}
         </View>
       </GestureHandlerRootView>
     </SafeAreaView>

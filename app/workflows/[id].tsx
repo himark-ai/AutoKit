@@ -184,9 +184,6 @@ export default function WorkflowEditor() {
         setLinks={setLinks}
         nodesStore={nodesStore}
         onSave={saveWorkflow}
-        onRun={runWorkflow}
-        onDelete={deleteWorkflow}
-        saving={saving}
       />
     </SafeAreaView>
   );
